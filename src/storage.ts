@@ -1,14 +1,22 @@
 import type { SavedDay, ShotResult } from './game/types.ts'
 
-const KEY = 'pinle-v2'
+const KEY = 'pinle-release-1'
+const LEGACY_KEYS = ['pinle-v1', 'pinle-v2']
 
 function stripPath(result: ShotResult): ShotResult {
   return { ...result, path: [] }
 }
 
+function dropLegacySaves(): void {
+  for (const key of LEGACY_KEYS) {
+    localStorage.removeItem(key)
+  }
+}
+
 export function loadSavedDay(): SavedDay | null {
   try {
-    const raw = localStorage.getItem(KEY) ?? localStorage.getItem('pinle-v1')
+    dropLegacySaves()
+    const raw = localStorage.getItem(KEY)
     if (!raw) {
       return null
     }
@@ -34,5 +42,5 @@ export function saveDay(value: SavedDay): void {
 
 export function clearSavedDay(): void {
   localStorage.removeItem(KEY)
-  localStorage.removeItem('pinle-v1')
+  dropLegacySaves()
 }

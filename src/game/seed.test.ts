@@ -8,8 +8,8 @@ describe('daily hole seed', () => {
   })
 
   it('numbers puzzles from the Pinle epoch', () => {
-    expect(puzzleNumber(Date.UTC(2026, 9, 11, 12))).toBe(1)
-    expect(puzzleNumber(Date.UTC(2026, 9, 12, 12))).toBe(2)
+    expect(puzzleNumber(Date.UTC(2026, 9, 12, 12))).toBe(1)
+    expect(puzzleNumber(Date.UTC(2026, 9, 13, 12))).toBe(2)
   })
 
   it('builds the same hole for the same instant', () => {

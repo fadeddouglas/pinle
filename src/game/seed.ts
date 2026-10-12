@@ -1,6 +1,6 @@
 import type { Hole } from './types.ts'
 
-export const PINLE_EPOCH_UTC = Date.UTC(2026, 9, 11)
+export const PINLE_EPOCH_UTC = Date.UTC(2026, 9, 12)
 
 export function utcDayKey(now = Date.now()): string {
   return new Date(now).toISOString().slice(0, 10)
