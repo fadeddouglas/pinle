@@ -1,6 +1,6 @@
-import { formatDistance, formatRoundShareText, formatShareText } from '../game/physics.ts'
+import { formatDistance, formatRoundShareText, formatShareText, SITE_HOST } from '../game/physics.ts'
 import type { Hole, ShotResult } from '../game/types.ts'
-import { pageOrigin, shareTextWithLink, shareUrl } from './shareLink.ts'
+import { shareTextWithLink } from './shareLink.ts'
 
 function fillStroke(
   ctx: CanvasRenderingContext2D,
@@ -20,7 +20,11 @@ function fillStroke(
   ctx.fillText(text, x, y)
 }
 
-export async function drawShareCard(hole: Hole, result: ShotResult): Promise<Blob> {
+export async function drawShareCard(
+  hole: Hole,
+  result: ShotResult,
+  round?: ShotResult[],
+): Promise<Blob> {
   const canvas = document.createElement('canvas')
   canvas.width = 900
   canvas.height = 1120
@@ -52,6 +56,14 @@ export async function drawShareCard(hole: Hole, result: ShotResult): Promise<Blo
 
   ctx.font = '36px Anton, sans-serif'
   fillStroke(ctx, `${hole.yards} YD PAR 3`, 450, 410, '#ffffff', '#111', 8)
+
+  if (round && round.length > 1) {
+    const marks = round.map((shot) =>
+      shot.ace ? 'ACE' : shot.lie === 'water' ? 'WET' : formatDistance(shot.distanceFeet, false),
+    )
+    ctx.font = '30px Anton, sans-serif'
+    fillStroke(ctx, marks.join(' · '), 450, 470, '#ffffff', '#111', 8)
+  }
 
   const pinX = 450 + hole.pinX * 8
   const pinY = 820
@@ -96,7 +108,7 @@ export async function drawShareCard(hole: Hole, result: ShotResult): Promise<Blo
   ctx.stroke()
 
   ctx.font = '28px Anton, sans-serif'
-  fillStroke(ctx, 'PINLE.IO', 450, 1080, '#fff', '#111', 8)
+  fillStroke(ctx, SITE_HOST.toUpperCase(), 450, 1080, '#fff', '#111', 8)
 
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((value) => {
@@ -119,41 +131,71 @@ function downloadCard(blob: Blob, puzzle: number): void {
   URL.revokeObjectURL(url)
 }
 
+function scoreText(hole: Hole, result: ShotResult, shots: ShotResult[]): string {
+  const score =
+    shots.length > 1
+      ? formatRoundShareText(hole.puzzleNumber, shots)
+      : formatShareText(hole.puzzleNumber, result)
+  return shareTextWithLink(score, `https://${SITE_HOST}`)
+}
+
+async function copyGraphic(blob: Blob, text: string): Promise<boolean> {
+  if (!navigator.clipboard?.write) {
+    return false
+  }
+  const png = blob
+  const plain = new Blob([text], { type: 'text/plain' })
+  try {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'image/png': png,
+        'text/plain': plain,
+      }),
+    ])
+    return true
+  } catch {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': Promise.resolve(png),
+          'text/plain': Promise.resolve(plain),
+        }),
+      ])
+      return true
+    } catch {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+        return true
+      } catch {
+        return false
+      }
+    }
+  }
+}
+
 export async function shareResult(
   hole: Hole,
   result: ShotResult,
   round?: ShotResult[],
 ): Promise<string> {
   const shots = round && round.length > 0 ? round : [result]
-  const url = shareUrl(hole, shots, pageOrigin())
-  const score =
-    shots.length > 1
-      ? formatRoundShareText(hole.puzzleNumber, shots)
-      : formatShareText(hole.puzzleNumber, result)
-  const text = shareTextWithLink(score, url)
+  const text = scoreText(hole, result, shots)
+  const blob = await drawShareCard(hole, result, shots)
+  const file = new File([blob], `pinle-${hole.puzzleNumber}.png`, { type: 'image/png' })
   const title = `PINLE #${hole.puzzleNumber}`
 
-  try {
-    if (typeof history !== 'undefined') {
-      const next = new URL(window.location.href)
-      next.searchParams.set('r', url.split('r=')[1] ?? '')
-      history.replaceState({}, '', `${next.pathname}${next.search}`)
-    }
-  } catch {
-    /* keep sharing even if the address bar cannot update */
+  if (await copyGraphic(blob, text)) {
+    return 'copied-image'
   }
 
-  const blob = await drawShareCard(hole, result)
-  const file = new File([blob], `pinle-${hole.puzzleNumber}.png`, { type: 'image/png' })
-  const withFile = { files: [file], text, title, url }
-
   if (navigator.share) {
+    const withFile = { files: [file], text, title }
     try {
       if (navigator.canShare?.(withFile)) {
         await navigator.share(withFile)
         return 'shared'
       }
-      await navigator.share({ title, text, url })
+      await navigator.share({ title, text })
       return 'shared'
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -163,26 +205,11 @@ export async function shareResult(
   }
 
   try {
-    await navigator.clipboard.writeText(url)
-    return 'copied-link'
+    await navigator.clipboard.writeText(text)
+    downloadCard(blob, hole.puzzleNumber)
+    return 'copied-text'
   } catch {
-    try {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'image/png': blob,
-          'text/plain': new Blob([text], { type: 'text/plain' }),
-        }),
-      ])
-      return 'copied-image'
-    } catch {
-      try {
-        await navigator.clipboard.writeText(text)
-        downloadCard(blob, hole.puzzleNumber)
-        return 'copied-text'
-      } catch {
-        downloadCard(blob, hole.puzzleNumber)
-        return 'downloaded'
-      }
-    }
+    downloadCard(blob, hole.puzzleNumber)
+    return 'downloaded'
   }
 }

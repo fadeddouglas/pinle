@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Anton&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Pacifico&display=swap');
 
 :root {
   --ink: #111111;
@@ -7,10 +7,13 @@
   --grass: #1f7a3a;
   --sky: #4eb7ff;
   --display: 'Anton', sans-serif;
-  --ui: 'Segoe UI', system-ui, sans-serif;
+  --script: 'Pacifico', cursive;
+  --ui: 'Anton', 'Segoe UI', system-ui, sans-serif;
   color: var(--paper);
   background: #0d3a1c;
-  font-family: var(--ui);
+  font-family: var(--display);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 * {
@@ -25,6 +28,9 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
+  font-family: var(--display);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .app {
@@ -90,7 +96,7 @@ body,
 
 .brand {
   margin: 0;
-  font-family: cursive;
+  font-family: var(--script);
   font-size: 42px;
   font-weight: 700;
   line-height: 0.95;
@@ -178,6 +184,7 @@ body,
 .hud-right {
   position: absolute;
   top: 118px;
+  bottom: 16px;
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -186,8 +193,8 @@ body,
   border: 2px solid var(--ink);
   border-radius: 12px;
   padding: 7px;
-  max-height: calc(100% - 136px);
-  overflow: auto;
+  max-height: none;
+  overflow: hidden;
 }
 
 .hud-left {
@@ -281,9 +288,10 @@ body,
 
 .hud-right .club {
   width: 100%;
-  min-height: 32px;
+  flex: 1 1 0;
+  min-height: 0;
   padding: 4px 2px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .result {
@@ -370,23 +378,45 @@ body,
 
 @media (max-width: 640px) {
   .top .brand {
-    font-size: 32px;
+    font-size: 36px;
     -webkit-text-stroke: 2px var(--ink);
+  }
+  .day {
+    font-size: 18px;
   }
   .result h2 {
     font-size: 52px;
   }
   .hud-left,
   .hud-right {
-    top: 92px;
-    max-height: calc(100% - 104px);
+    top: 84px;
+    bottom: 10px;
+    max-height: none;
   }
   .hud-left {
     right: 6px;
-    width: 148px;
+    width: 156px;
+    padding: 8px;
+    gap: 8px;
   }
   .hud-right {
     left: 6px;
-    width: 52px;
+    width: 72px;
+    padding: 8px;
+    gap: 6px;
+  }
+  .hud-right .club {
+    font-size: 16px;
+  }
+  .club,
+  .swing,
+  .ghost,
+  .slider span,
+  .spin-snap {
+    font-family: var(--display);
+  }
+  .swing {
+    min-height: 44px;
+    font-size: 18px;
   }
 }

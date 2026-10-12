@@ -7,10 +7,8 @@ import { shareResult } from './share/shareCard.ts'
 import {
   decodeShareCard,
   holeFromShare,
-  pageOrigin,
   readShareParam,
   shareToShotResults,
-  shareUrl,
 } from './share/shareLink.ts'
 import { loadSavedDay, saveDay } from './storage.ts'
 import { Hud } from './ui/Hud.tsx'
@@ -27,18 +25,15 @@ const MAX_ZOOM = 2.4
 
 function shareMessage(kind: string): string {
   if (kind === 'shared') {
-    return 'LINK SENT'
-  }
-  if (kind === 'copied-link') {
-    return 'LINK COPIED'
+    return 'CARD SHARED'
   }
   if (kind === 'copied-image') {
-    return 'CARD COPIED'
+    return 'CARD COPIED · pinle.io'
   }
   if (kind === 'downloaded') {
-    return 'CARD SAVED — PASTE THE SCORE BELOW'
+    return 'CARD SAVED — PASTE pinle.io WITH IT'
   }
-  return 'SCORE COPIED'
+  return 'SCORE COPIED · pinle.io'
 }
 
 function loadSharedCard(): { hole: Hole; shots: ShotResult[] } | null {
@@ -313,7 +308,6 @@ export default function App() {
           triesMax={SHOTS_PER_DAY}
           shareStatus={shareStatus}
           sharedView={Boolean(shared)}
-          shareLink={shareUrl(hole, shots.length > 0 ? shots : [result], pageOrigin())}
           onShare={handleShare}
           onAccount={() => setAccountOpen(true)}
           onNextShot={!shared && shots.length < SHOTS_PER_DAY ? handleNextShot : undefined}

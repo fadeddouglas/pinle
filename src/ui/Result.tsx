@@ -1,6 +1,6 @@
-import { formatDistance, formatRoundShareText } from '../game/physics.ts'
+import { formatDistance, formatRoundShareText, SITE_HOST } from '../game/physics.ts'
 import type { Hole, ShotResult } from '../game/types.ts'
-import { pageOrigin, shareTextWithLink, shareUrl } from '../share/shareLink.ts'
+import { shareTextWithLink } from '../share/shareLink.ts'
 
 type Props = {
   hole: Hole
@@ -9,7 +9,6 @@ type Props = {
   triesMax: number
   shareStatus: string | null
   sharedView?: boolean
-  shareLink?: string
   onShare: () => void
   onAccount: () => void
   onNextShot?: () => void
@@ -23,7 +22,6 @@ export function Result({
   triesMax,
   shareStatus,
   sharedView = false,
-  shareLink,
   onShare,
   onAccount,
   onNextShot,
@@ -38,8 +36,10 @@ export function Result({
       ? 'FIND THE DROP'
       : 'FROM THE STICK'
   const scoreShots = remaining > 0 && !sharedView ? [result] : results
-  const link = shareLink ?? shareUrl(hole, scoreShots, pageOrigin())
-  const paste = shareTextWithLink(formatRoundShareText(hole.puzzleNumber, scoreShots), link)
+  const paste = shareTextWithLink(
+    formatRoundShareText(hole.puzzleNumber, scoreShots),
+    `https://${SITE_HOST}`,
+  )
 
   return (
     <div className="result" role="dialog" aria-label="Shot result">
@@ -63,7 +63,7 @@ export function Result({
         </button>
       ) : (
         <button type="button" className="swing" onClick={onShare}>
-          SHARE LINK
+          SHARE
         </button>
       )}
       {!sharedView && onNextShot && remaining > 0 ? (
@@ -73,7 +73,7 @@ export function Result({
       ) : null}
       {sharedView ? (
         <button type="button" className="ghost" onClick={onShare}>
-          SHARE LINK
+          SHARE
         </button>
       ) : null}
       {shareStatus ? <p className="share-status">{shareStatus}</p> : null}
