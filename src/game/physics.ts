@@ -129,7 +129,7 @@ export function simulateShot(input: ShotInput, hole: Hole): ShotResult {
     if (airborne) {
       vx += wind.x * MPH_TO_YPS * 0.22 * DT
       vy += wind.y * MPH_TO_YPS * 0.22 * DT
-      const spinYaw = input.sidespin * 0.42 * DT
+      const spinYaw = input.sidespin * 0.14 * DT
       const cos = Math.cos(spinYaw)
       const sin = Math.sin(spinYaw)
       const nx = vx * cos + vy * sin
