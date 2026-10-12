@@ -322,14 +322,16 @@ body,
 .share-text {
   margin: 0;
   padding: 10px 14px;
+  width: 100%;
   background: #082010;
   border: 3px solid var(--ink);
   color: #fff;
   font-family: var(--display);
-  font-size: 20px;
+  font-size: 16px;
   letter-spacing: 0.04em;
   text-align: center;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   user-select: text;
 }
 

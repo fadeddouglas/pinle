@@ -2,8 +2,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { recommendedClubId } from './game/clubs.ts'
 import { bestShot, simulateShot } from './game/physics.ts'
 import { createHole } from './game/seed.ts'
-import type { ShotResult, Vec3 } from './game/types.ts'
+import type { Hole, ShotResult, Vec3 } from './game/types.ts'
 import { shareResult } from './share/shareCard.ts'
+import {
+  decodeShareCard,
+  holeFromShare,
+  pageOrigin,
+  readShareParam,
+  shareToShotResults,
+  shareUrl,
+} from './share/shareLink.ts'
 import { loadSavedDay, saveDay } from './storage.ts'
 import { Hud } from './ui/Hud.tsx'
 import { Landing } from './ui/Landing.tsx'
@@ -19,7 +27,10 @@ const MAX_ZOOM = 2.4
 
 function shareMessage(kind: string): string {
   if (kind === 'shared') {
-    return 'SHARED WITH YOUR CREW'
+    return 'LINK SENT'
+  }
+  if (kind === 'copied-link') {
+    return 'LINK COPIED'
   }
   if (kind === 'copied-image') {
     return 'CARD COPIED'
@@ -30,23 +41,52 @@ function shareMessage(kind: string): string {
   return 'SCORE COPIED'
 }
 
+function loadSharedCard(): { hole: Hole; shots: ShotResult[] } | null {
+  const raw = readShareParam()
+  if (!raw) {
+    return null
+  }
+  const card = decodeShareCard(raw)
+  if (!card) {
+    return null
+  }
+  return { hole: holeFromShare(card), shots: shareToShotResults(card.s) }
+}
+
+function teeBall(): Vec3 {
+  return { x: 0, y: 0, z: 0.05 }
+}
+
+function restBall(shot: ShotResult): Vec3 {
+  return { x: shot.rest.x, y: shot.rest.y, z: shot.ace ? -0.05 : 0 }
+}
+
 export default function App() {
-  const [hole] = useState(() => createHole())
+  const [shared, setShared] = useState(() => loadSharedCard())
+  const [hole, setHole] = useState(() => shared?.hole ?? createHole())
   const [clubId, setClubId] = useState(() => recommendedClubId(hole.yards))
   const [aimDeg, setAimDeg] = useState(0)
   const [backspin, setBackspin] = useState(0.4)
   const [sidespin, setSidespin] = useState(0)
   const [power, setPower] = useState(0.82)
-  const [phase, setPhase] = useState<Phase>('aim')
-  const [ball, setBall] = useState<Vec3>({ x: 0, y: 0, z: 0.05 })
-  const [result, setResult] = useState<ShotResult | null>(null)
-  const [shots, setShots] = useState<ShotResult[]>([])
+  const [phase, setPhase] = useState<Phase>(() => (shared ? 'done' : 'aim'))
+  const [ball, setBall] = useState<Vec3>(() => {
+    const last = shared?.shots[shared.shots.length - 1]
+    return last ? restBall(last) : teeBall()
+  })
+  const [result, setResult] = useState<ShotResult | null>(() =>
+    shared ? (bestShot(shared.shots) ?? null) : null,
+  )
+  const [shots, setShots] = useState<ShotResult[]>(() => shared?.shots ?? [])
   const [shareStatus, setShareStatus] = useState<string | null>(null)
   const [accountOpen, setAccountOpen] = useState(false)
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
-  const [playing, setPlaying] = useState(false)
+  const [playing, setPlaying] = useState(() => Boolean(shared))
 
   useEffect(() => {
+    if (shared) {
+      return
+    }
     const saved = loadSavedDay()
     if (saved && saved.dayKey === hole.dayKey && saved.results.length > 0) {
       const last = saved.results[saved.results.length - 1]
@@ -60,7 +100,7 @@ export default function App() {
       setSidespin(last.sidespin)
       setPower(last.power)
     }
-  }, [hole.dayKey])
+  }, [hole.dayKey, shared])
 
   useEffect(() => {
     if (phase !== 'fly' || !result) {
@@ -149,9 +189,33 @@ export default function App() {
     setSidespin(0)
     setPower(0.82)
     setPhase('aim')
-    setBall({ x: 0, y: 0, z: 0.05 })
+    setBall(teeBall())
     setResult(null)
     setShareStatus(null)
+  }
+
+  function handlePlayToday() {
+    const today = createHole()
+    try {
+      const next = new URL(window.location.href)
+      next.searchParams.delete('r')
+      history.replaceState({}, '', `${next.pathname}${next.search}`)
+    } catch {
+      /* stay on the shared URL if history is blocked */
+    }
+    setShared(null)
+    setHole(today)
+    setClubId(recommendedClubId(today.yards))
+    setAimDeg(0)
+    setBackspin(0.4)
+    setSidespin(0)
+    setPower(0.82)
+    setPhase('aim')
+    setBall(teeBall())
+    setResult(null)
+    setShots([])
+    setShareStatus(null)
+    setPlaying(true)
   }
 
   async function handleShare() {
@@ -159,14 +223,18 @@ export default function App() {
       return
     }
     try {
-      const roundDone = shots.length >= SHOTS_PER_DAY
+      const pack = shots.length > 0 ? shots : [result]
+      const roundDone = pack.length >= SHOTS_PER_DAY || Boolean(shared)
       const kind = await shareResult(
         hole,
-        roundDone ? bestShot(shots) : result,
-        roundDone ? shots : undefined,
+        roundDone ? bestShot(pack) : result,
+        pack,
       )
       setShareStatus(shareMessage(kind))
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
       setShareStatus('COULD NOT SHARE — COPY IS BLOCKED')
     }
   }
@@ -186,9 +254,9 @@ export default function App() {
         ball={ball}
         aimDeg={aimDeg}
         follow={phase === 'fly'}
-        showAim={phase === 'aim'}
+        showAim={phase === 'aim' && !shared}
         zoom={zoom}
-        onAimDrag={phase === 'aim' ? setAimDeg : undefined}
+        onAimDrag={phase === 'aim' && !shared ? setAimDeg : undefined}
       />
       <header className="top">
         <div>
@@ -222,7 +290,7 @@ export default function App() {
           +
         </button>
       </div>
-      {phase !== 'done' ? (
+      {phase !== 'done' && !shared ? (
         <Hud
           clubId={clubId}
           aimDeg={aimDeg}
@@ -244,9 +312,12 @@ export default function App() {
           results={shots}
           triesMax={SHOTS_PER_DAY}
           shareStatus={shareStatus}
+          sharedView={Boolean(shared)}
+          shareLink={shareUrl(hole, shots.length > 0 ? shots : [result], pageOrigin())}
           onShare={handleShare}
           onAccount={() => setAccountOpen(true)}
-          onNextShot={shots.length < SHOTS_PER_DAY ? handleNextShot : undefined}
+          onNextShot={!shared && shots.length < SHOTS_PER_DAY ? handleNextShot : undefined}
+          onPlayToday={shared ? handlePlayToday : undefined}
         />
       ) : null}
       {accountOpen ? (

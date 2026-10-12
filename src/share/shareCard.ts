@@ -1,5 +1,6 @@
 import { formatDistance, formatRoundShareText, formatShareText } from '../game/physics.ts'
 import type { Hole, ShotResult } from '../game/types.ts'
+import { pageOrigin, shareTextWithLink, shareUrl } from './shareLink.ts'
 
 function fillStroke(
   ctx: CanvasRenderingContext2D,
@@ -95,7 +96,7 @@ export async function drawShareCard(hole: Hole, result: ShotResult): Promise<Blo
   ctx.stroke()
 
   ctx.font = '28px Anton, sans-serif'
-  fillStroke(ctx, 'ONE SHOT. CLOSEST TO THE PIN.', 450, 1080, '#fff', '#111', 8)
+  fillStroke(ctx, 'PINLE.IO', 450, 1080, '#fff', '#111', 8)
 
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((value) => {
@@ -123,34 +124,65 @@ export async function shareResult(
   result: ShotResult,
   round?: ShotResult[],
 ): Promise<string> {
-  const text =
-    round && round.length > 1
-      ? formatRoundShareText(hole.puzzleNumber, round)
+  const shots = round && round.length > 0 ? round : [result]
+  const url = shareUrl(hole, shots, pageOrigin())
+  const score =
+    shots.length > 1
+      ? formatRoundShareText(hole.puzzleNumber, shots)
       : formatShareText(hole.puzzleNumber, result)
+  const text = shareTextWithLink(score, url)
+  const title = `PINLE #${hole.puzzleNumber}`
+
+  try {
+    if (typeof history !== 'undefined') {
+      const next = new URL(window.location.href)
+      next.searchParams.set('r', url.split('r=')[1] ?? '')
+      history.replaceState({}, '', `${next.pathname}${next.search}`)
+    }
+  } catch {
+    /* keep sharing even if the address bar cannot update */
+  }
+
   const blob = await drawShareCard(hole, result)
   const file = new File([blob], `pinle-${hole.puzzleNumber}.png`, { type: 'image/png' })
+  const withFile = { files: [file], text, title, url }
 
-  if (navigator.share && navigator.canShare?.({ files: [file], text })) {
-    await navigator.share({ files: [file], text, title: `PINLE #${hole.puzzleNumber}` })
-    return 'shared'
+  if (navigator.share) {
+    try {
+      if (navigator.canShare?.(withFile)) {
+        await navigator.share(withFile)
+        return 'shared'
+      }
+      await navigator.share({ title, text, url })
+      return 'shared'
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error
+      }
+    }
   }
 
   try {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        'image/png': blob,
-        'text/plain': new Blob([text], { type: 'text/plain' }),
-      }),
-    ])
-    return 'copied-image'
+    await navigator.clipboard.writeText(url)
+    return 'copied-link'
   } catch {
     try {
-      await navigator.clipboard.writeText(text)
-      downloadCard(blob, hole.puzzleNumber)
-      return 'copied-text'
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': blob,
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        }),
+      ])
+      return 'copied-image'
     } catch {
-      downloadCard(blob, hole.puzzleNumber)
-      return 'downloaded'
+      try {
+        await navigator.clipboard.writeText(text)
+        downloadCard(blob, hole.puzzleNumber)
+        return 'copied-text'
+      } catch {
+        downloadCard(blob, hole.puzzleNumber)
+        return 'downloaded'
+      }
     }
   }
 }
