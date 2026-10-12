@@ -1,7 +1,7 @@
 import type { SavedDay, ShotResult } from './game/types.ts'
 
-const KEY = 'pinle-release-1'
-const LEGACY_KEYS = ['pinle-v1', 'pinle-v2']
+const KEY = 'pinle-release-2'
+const LEGACY_KEYS = ['pinle-v1', 'pinle-v2', 'pinle-release-1']
 
 function stripPath(result: ShotResult): ShotResult {
   return { ...result, path: [] }
