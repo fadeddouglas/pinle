@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Analytics } from '@vercel/analytics/react'
 import { recommendedClubId } from './game/clubs.ts'
 import { bestShot, simulateShot } from './game/physics.ts'
 import { createHole } from './game/seed.ts'
@@ -238,6 +239,7 @@ export default function App() {
     return (
       <div className="app">
         <Landing onPlay={() => setPlaying(true)} />
+        <Analytics />
       </div>
     )
   }
@@ -328,6 +330,7 @@ export default function App() {
           </div>
         </div>
       ) : null}
+      <Analytics />
     </div>
   )
 }
