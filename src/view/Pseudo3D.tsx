@@ -12,6 +12,7 @@ type Props = {
   hole: Hole
   ball: Vec3
   aimDeg: number
+  sidespin: number
   follow: boolean
   showAim: boolean
   zoom: number
@@ -20,17 +21,18 @@ type Props = {
 
 type Point = { x: number; y: number; z?: number }
 
-function fillPoly(
+const HAZE: [number, number, number] = [246, 214, 168]
+
+function tracePoly(
   ctx: CanvasRenderingContext2D,
   cam: Camera,
   width: number,
   height: number,
   points: Point[],
-  fill: string,
-) {
+): boolean {
   const mapped = points.map((p) => project(p.x, p.y, p.z ?? 0, cam, width, height))
   if (mapped.some((m) => !m)) {
-    return
+    return false
   }
   ctx.beginPath()
   mapped.forEach((m, i) => {
@@ -44,16 +46,115 @@ function fillPoly(
     }
   })
   ctx.closePath()
+  return true
+}
+
+function fillPoly(
+  ctx: CanvasRenderingContext2D,
+  cam: Camera,
+  width: number,
+  height: number,
+  points: Point[],
+  fill: string | CanvasGradient,
+) {
+  if (!tracePoly(ctx, cam, width, height, points)) {
+    return
+  }
   ctx.fillStyle = fill
   ctx.fill()
 }
 
-function shade(hex: string, lift: number): string {
+function strokePoly(
+  ctx: CanvasRenderingContext2D,
+  cam: Camera,
+  width: number,
+  height: number,
+  points: Point[],
+  stroke: string,
+  lineWidth: number,
+) {
+  if (!tracePoly(ctx, cam, width, height, points)) {
+    return
+  }
+  ctx.strokeStyle = stroke
+  ctx.lineWidth = lineWidth
+  ctx.stroke()
+}
+
+function ring(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  count: number,
+  z: (x: number, y: number) => number,
+): Point[] {
+  const points: Point[] = []
+  for (let i = 0; i < count; i += 1) {
+    const a = (i / count) * Math.PI * 2
+    const x = cx + Math.cos(a) * rx
+    const y = cy + Math.sin(a) * ry
+    points.push({ x, y, z: z(x, y) })
+  }
+  return points
+}
+
+function shade(hex: string, lift: number, fog = 0): string {
   const n = Number.parseInt(hex.slice(1), 16)
-  const r = Math.min(255, Math.max(0, ((n >> 16) & 255) + lift))
-  const g = Math.min(255, Math.max(0, ((n >> 8) & 255) + lift))
-  const b = Math.min(255, Math.max(0, (n & 255) + lift))
+  const channel = (value: number, haze: number) => {
+    const lit = Math.min(255, Math.max(0, value + lift))
+    return Math.round(lit + (haze - lit) * fog)
+  }
+  const r = channel((n >> 16) & 255, HAZE[0])
+  const g = channel((n >> 8) & 255, HAZE[1])
+  const b = channel(n & 255, HAZE[2])
   return `rgb(${r}, ${g}, ${b})`
+}
+
+function drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  const puffs: [number, number, number][] = [
+    [-0.9, 0.15, 0.45],
+    [-0.35, -0.2, 0.62],
+    [0.3, -0.1, 0.55],
+    [0.85, 0.15, 0.42],
+  ]
+  ctx.fillStyle = 'rgba(232, 160, 120, 0.45)'
+  ctx.beginPath()
+  ctx.ellipse(x, y + size * 0.28, size * 1.35, size * 0.32, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(255, 246, 230, 0.92)'
+  ctx.beginPath()
+  for (const [dx, dy, r] of puffs) {
+    ctx.moveTo(x + dx * size + r * size, y + dy * size)
+    ctx.arc(x + dx * size, y + dy * size, r * size, 0, Math.PI * 2)
+  }
+  ctx.fill()
+}
+
+function drawHills(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  horizon: number,
+  rise: number,
+  freq: number,
+  phase: number,
+  fill: string,
+  bottom: number,
+) {
+  ctx.fillStyle = fill
+  ctx.beginPath()
+  ctx.moveTo(0, bottom)
+  for (let x = 0; x <= width + 16; x += 16) {
+    const t = x / Math.max(1, width)
+    const y =
+      horizon -
+      rise * (0.55 + 0.45 * Math.sin(t * freq + phase)) -
+      rise * 0.25 * Math.sin(t * freq * 2.7 + phase * 1.9)
+    ctx.lineTo(x, y)
+  }
+  ctx.lineTo(width, bottom)
+  ctx.closePath()
+  ctx.fill()
 }
 
 function drawTree(
@@ -70,25 +171,43 @@ function drawTree(
     return
   }
   const scale = Math.max(0.6, base.scale / 16)
+  const canopy = Math.max(8, tree.radius * 5.5 * scale)
+
+  ctx.fillStyle = 'rgba(10, 40, 18, 0.28)'
+  ctx.beginPath()
+  ctx.ellipse(base.sx + canopy * 0.35, base.sy, canopy * 0.95, canopy * 0.26, 0, 0, Math.PI * 2)
+  ctx.fill()
+
   ctx.strokeStyle = '#4a2a12'
   ctx.lineWidth = Math.max(2, 3.2 * scale)
+  ctx.lineCap = 'round'
   ctx.beginPath()
   ctx.moveTo(base.sx, base.sy)
   ctx.lineTo(top.sx, top.sy)
   ctx.stroke()
 
-  const canopy = Math.max(8, tree.radius * 5.5 * scale)
-  ctx.fillStyle = '#0f5a28'
+  ctx.fillStyle = '#0e4a22'
+  ctx.strokeStyle = '#08311a'
+  ctx.lineWidth = Math.max(1, 1.4 * scale)
   ctx.beginPath()
-  ctx.ellipse(top.sx, top.sy + canopy * 0.15, canopy * 0.72, canopy, 0, 0, Math.PI * 2)
+  ctx.ellipse(top.sx, top.sy + canopy * 0.15, canopy * 0.74, canopy, 0, 0, Math.PI * 2)
   ctx.fill()
-  ctx.fillStyle = '#1f8a3e'
+  ctx.stroke()
+  ctx.fillStyle = '#1c7434'
   ctx.beginPath()
-  ctx.ellipse(top.sx, top.sy - canopy * 0.05, canopy * 0.55, canopy * 0.72, 0, 0, Math.PI * 2)
+  ctx.ellipse(top.sx - canopy * 0.06, top.sy - canopy * 0.02, canopy * 0.6, canopy * 0.78, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#3f9e45'
+  ctx.beginPath()
+  ctx.ellipse(top.sx - canopy * 0.2, top.sy - canopy * 0.3, canopy * 0.3, canopy * 0.38, -0.3, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(255, 214, 140, 0.22)'
+  ctx.beginPath()
+  ctx.ellipse(top.sx - canopy * 0.28, top.sy - canopy * 0.45, canopy * 0.14, canopy * 0.18, -0.3, 0, Math.PI * 2)
   ctx.fill()
 }
 
-export function Pseudo3D({ hole, ball, aimDeg, follow, showAim, zoom, onAimDrag }: Props) {
+export function Pseudo3D({ hole, ball, aimDeg, sidespin, follow, showAim, zoom, onAimDrag }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
   const drag = useRef<{ pointerId: number; startX: number; startAim: number } | null>(null)
 
@@ -121,22 +240,42 @@ export function Pseudo3D({ hole, ball, aimDeg, follow, showAim, zoom, onAimDrag 
           }
         : { x: 0, y: -22 / zoom, z: 8.2 / Math.sqrt(zoom), yaw: 0, zoom }
 
-      const sky = ctx.createLinearGradient(0, 0, 0, height * 0.5)
-      sky.addColorStop(0, '#3aa8ff')
-      sky.addColorStop(0.55, '#9ad4ff')
-      sky.addColorStop(1, '#d7f1ff')
+      const horizon = height * 0.46
+      const sky = ctx.createLinearGradient(0, 0, 0, horizon)
+      sky.addColorStop(0, '#3f7fd6')
+      sky.addColorStop(0.45, '#8fb8ea')
+      sky.addColorStop(0.78, '#ffcf9a')
+      sky.addColorStop(1, '#ffe7b8')
       ctx.fillStyle = sky
       ctx.fillRect(0, 0, width, height)
 
-      ctx.fillStyle = 'rgba(255,255,255,0.85)'
+      const sunX = width * 0.8
+      const sunY = horizon - 46
+      const sunGlow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, Math.max(120, width * 0.3))
+      sunGlow.addColorStop(0, 'rgba(255, 246, 210, 0.95)')
+      sunGlow.addColorStop(0.12, 'rgba(255, 220, 150, 0.6)')
+      sunGlow.addColorStop(1, 'rgba(255, 190, 120, 0)')
+      ctx.fillStyle = sunGlow
+      ctx.fillRect(0, 0, width, horizon + 40)
+      ctx.fillStyle = '#fff6da'
       ctx.beginPath()
-      ctx.ellipse(width * 0.18, height * 0.12, 70, 22, 0, 0, Math.PI * 2)
-      ctx.ellipse(width * 0.22, height * 0.11, 44, 16, 0, 0, Math.PI * 2)
+      ctx.arc(sunX, sunY, 16, 0, Math.PI * 2)
       ctx.fill()
-      ctx.beginPath()
-      ctx.ellipse(width * 0.72, height * 0.09, 80, 20, 0, 0, Math.PI * 2)
-      ctx.ellipse(width * 0.78, height * 0.08, 40, 14, 0, 0, Math.PI * 2)
-      ctx.fill()
+
+      const cloudScale = Math.min(1.4, Math.max(0.7, width / 900))
+      drawCloud(ctx, width * 0.17, height * 0.12, 42 * cloudScale)
+      drawCloud(ctx, width * 0.62, height * 0.07, 34 * cloudScale)
+      drawCloud(ctx, width * 0.9, height * 0.17, 26 * cloudScale)
+      drawCloud(ctx, width * 0.4, height * 0.22, 20 * cloudScale)
+
+      drawHills(ctx, width, horizon, 56, 3.4, 0.6, '#c99a8c', horizon + 40)
+      drawHills(ctx, width, horizon, 34, 5.1, 2.2, '#8f9f6c', horizon + 40)
+      drawHills(ctx, width, horizon, 16, 8.3, 4.1, '#5f8a4c', height)
+      const hillHaze = ctx.createLinearGradient(0, horizon - 70, 0, horizon + 10)
+      hillHaze.addColorStop(0, 'rgba(255, 226, 180, 0)')
+      hillHaze.addColorStop(1, 'rgba(255, 226, 180, 0.55)')
+      ctx.fillStyle = hillHaze
+      ctx.fillRect(0, horizon - 70, width, height - horizon + 70)
 
       const far = hole.yards + 48
       const xStep = 7
@@ -154,8 +293,18 @@ export function Pseudo3D({ hole, ball, aimDeg, follow, showAim, zoom, onAimDrag 
           const onFairway = Math.abs(midX) <= fairwayHalf && midY > -6 && midY < hole.yards + 10
           const onGreen =
             Math.hypot(midX - hole.pinX, midY - hole.yards) <= hole.greenRadius * 1.05
-          let color = onGreen ? '#e7ff7a' : onFairway ? '#4ec45f' : '#2d8a42'
-          color = shade(color, lift)
+          const stripe = Math.floor((x + 62) / xStep) % 2 === 0
+          const base = onGreen
+            ? '#c6ee5a'
+            : onFairway
+              ? stripe
+                ? '#5acb66'
+                : '#47b457'
+              : stripe
+                ? '#2f8c44'
+                : '#2a8340'
+          const fog = Math.min(0.42, Math.max(0, (midY - 30) / far) * 0.5)
+          const color = shade(base, lift, fog)
           fillPoly(
             ctx,
             cam,
@@ -174,78 +323,132 @@ export function Pseudo3D({ hole, ball, aimDeg, follow, showAim, zoom, onAimDrag 
 
       if (hole.water) {
         const wz = 0.05
+        const { x: wx, y: wy, w: ww, h: wh } = hole.water
+        const rect = (pad: number): Point[] => [
+          { x: wx - pad, y: wy - pad, z: wz },
+          { x: wx + ww + pad, y: wy - pad, z: wz },
+          { x: wx + ww + pad, y: wy + wh + pad, z: wz },
+          { x: wx - pad, y: wy + wh + pad, z: wz },
+        ]
+        fillPoly(ctx, cam, width, height, rect(0.9), '#245a3a')
+        const near = project(wx + ww / 2, wy, wz, cam, width, height)
+        const back = project(wx + ww / 2, wy + wh, wz, cam, width, height)
+        const waterFill: string | CanvasGradient =
+          near && back
+            ? (() => {
+                const g = ctx.createLinearGradient(0, back.sy, 0, near.sy)
+                g.addColorStop(0, '#7cc3ee')
+                g.addColorStop(0.35, '#2f8fd8')
+                g.addColorStop(1, '#155fae')
+                return g
+              })()
+            : '#1a74d0'
+        fillPoly(ctx, cam, width, height, rect(0), waterFill)
+        ctx.lineCap = 'round'
+        for (let i = 0; i < 5; i += 1) {
+          const sx = wx + ww * (0.12 + ((i * 0.37) % 0.7))
+          const sy = wy + wh * (0.18 + i * 0.15)
+          const p0 = project(sx, sy, wz, cam, width, height)
+          const p1 = project(sx + ww * 0.16, sy, wz, cam, width, height)
+          if (p0 && p1) {
+            ctx.strokeStyle = 'rgba(255, 250, 230, 0.55)'
+            ctx.lineWidth = Math.max(1, Math.min(3, p0.scale * 0.12))
+            ctx.beginPath()
+            ctx.moveTo(p0.sx, p0.sy)
+            ctx.lineTo(p1.sx, p1.sy)
+            ctx.stroke()
+          }
+        }
+      }
+
+      if (hole.bunker) {
+        const { x: bx, y: by, r: br } = hole.bunker
+        const onGround = (x: number, y: number) => terrainHeight(x, y, hole) + 0.08
+        fillPoly(ctx, cam, width, height, ring(bx, by, br * 1.16, br * 0.82, 18, onGround), '#a8874c')
+        fillPoly(ctx, cam, width, height, ring(bx, by, br, br * 0.7, 18, onGround), '#ecd59a')
         fillPoly(
           ctx,
           cam,
           width,
           height,
-          [
-            { x: hole.water.x, y: hole.water.y, z: wz },
-            { x: hole.water.x + hole.water.w, y: hole.water.y, z: wz },
-            { x: hole.water.x + hole.water.w, y: hole.water.y + hole.water.h, z: wz },
-            { x: hole.water.x, y: hole.water.y + hole.water.h, z: wz },
-          ],
-          '#1a74d0',
+          ring(bx - br * 0.12, by + br * 0.08, br * 0.62, br * 0.4, 14, onGround),
+          '#f8ebc4',
         )
       }
 
-      if (hole.bunker) {
-        const sand: Point[] = []
-        for (let i = 0; i < 12; i += 1) {
-          const a = (i / 12) * Math.PI * 2
-          const sx = hole.bunker.x + Math.cos(a) * hole.bunker.r
-          const sy = hole.bunker.y + Math.sin(a) * hole.bunker.r * 0.7
-          sand.push({ x: sx, y: sy, z: terrainHeight(sx, sy, hole) + 0.08 })
-        }
-        fillPoly(ctx, cam, width, height, sand, '#e7d39a')
-      }
-
       const greenZ = hole.greenLift
-      const collar: Point[] = []
-      const fringe: Point[] = []
-      const putting: Point[] = []
-      for (let i = 0; i < 22; i += 1) {
-        const a = (i / 22) * Math.PI * 2
-        const cx = Math.cos(a)
-        const cy = Math.sin(a)
-        collar.push({
-          x: hole.pinX + cx * hole.greenRadius * 1.5,
-          y: hole.yards + cy * hole.greenRadius * 1.18,
-          z: terrainHeight(
-            hole.pinX + cx * hole.greenRadius * 1.5,
-            hole.yards + cy * hole.greenRadius * 1.18,
-            hole,
-          ),
-        })
-        fringe.push({
-          x: hole.pinX + cx * hole.greenRadius * 1.22,
-          y: hole.yards + cy * hole.greenRadius * 0.98,
-          z: greenZ + 0.08,
-        })
-        putting.push({
-          x: hole.pinX + cx * hole.greenRadius * 1.02,
-          y: hole.yards + cy * hole.greenRadius * 0.82,
-          z: greenZ + 0.16,
-        })
-      }
-      fillPoly(ctx, cam, width, height, collar, '#5a3a14')
-      fillPoly(ctx, cam, width, height, fringe, '#f4f1c4')
-      fillPoly(ctx, cam, width, height, putting, '#d8ff4a')
-
-      const teeZ = terrainHeight(0, 0, hole)
+      const gr = hole.greenRadius
+      const gx = hole.pinX
+      const gy = hole.yards
       fillPoly(
         ctx,
         cam,
         width,
         height,
-        [
-          { x: -2.2, y: -1.4, z: teeZ + 0.05 },
-          { x: 2.2, y: -1.4, z: teeZ + 0.05 },
-          { x: 2.2, y: 1.2, z: teeZ + 0.05 },
-          { x: -2.2, y: 1.2, z: teeZ + 0.05 },
-        ],
-        '#6b4a1e',
+        ring(gx, gy, gr * 1.5, gr * 1.18, 26, (x, y) => terrainHeight(x, y, hole)),
+        '#2a7434',
       )
+      fillPoly(ctx, cam, width, height, ring(gx, gy, gr * 1.22, gr * 0.98, 26, () => greenZ + 0.08), '#86d65c')
+      const greenCenter = project(gx - gr * 0.25, gy - gr * 0.15, greenZ + 0.16, cam, width, height)
+      const puttingFill: string | CanvasGradient = greenCenter
+        ? (() => {
+            const g = ctx.createRadialGradient(
+              greenCenter.sx,
+              greenCenter.sy,
+              2,
+              greenCenter.sx,
+              greenCenter.sy,
+              Math.max(20, greenCenter.scale * gr * 1.2),
+            )
+            g.addColorStop(0, '#e8ff8a')
+            g.addColorStop(0.6, '#c8f05a')
+            g.addColorStop(1, '#a6dc48')
+            return g
+          })()
+        : '#d8ff4a'
+      fillPoly(ctx, cam, width, height, ring(gx, gy, gr * 1.02, gr * 0.82, 26, () => greenZ + 0.16), puttingFill)
+      const contour = Math.max(1, (greenCenter?.scale ?? 10) * 0.06)
+      strokePoly(
+        ctx,
+        cam,
+        width,
+        height,
+        ring(gx + gr * 0.18, gy + gr * 0.1, gr * 0.62, gr * 0.44, 22, () => greenZ + 0.16),
+        'rgba(255, 255, 255, 0.16)',
+        contour,
+      )
+      strokePoly(
+        ctx,
+        cam,
+        width,
+        height,
+        ring(gx + gr * 0.26, gy + gr * 0.14, gr * 0.32, gr * 0.22, 18, () => greenZ + 0.16),
+        'rgba(255, 255, 255, 0.14)',
+        contour,
+      )
+
+      const teeZ = terrainHeight(0, 0, hole)
+      const teeBox: Point[] = [
+        { x: -2.4, y: -1.5, z: teeZ + 0.05 },
+        { x: 2.4, y: -1.5, z: teeZ + 0.05 },
+        { x: 2.4, y: 1.3, z: teeZ + 0.05 },
+        { x: -2.4, y: 1.3, z: teeZ + 0.05 },
+      ]
+      fillPoly(ctx, cam, width, height, teeBox, '#6fd877')
+      strokePoly(ctx, cam, width, height, teeBox, 'rgba(20, 70, 30, 0.45)', 2)
+      for (const mx of [-1.9, 1.9]) {
+        const marker = project(mx, 0.9, teeZ + 0.12, cam, width, height)
+        if (marker) {
+          const mr = Math.max(2.5, marker.scale * 0.18)
+          ctx.fillStyle = '#e8322a'
+          ctx.strokeStyle = '#5a0d0a'
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.arc(marker.sx, marker.sy - mr, mr, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.stroke()
+        }
+      }
 
       const trees = [...hole.trees].sort((a, b) => b.y - a.y)
       for (const tree of trees) {
@@ -253,7 +456,7 @@ export function Pseudo3D({ hole, ball, aimDeg, follow, showAim, zoom, onAimDrag 
       }
 
       const pinBase = project(hole.pinX, hole.yards, greenZ + 0.16, cam, width, height)
-      const pinTop = project(hole.pinX, hole.yards, greenZ + 3.4, cam, width, height)
+      const pinTop = project(hole.pinX, hole.yards, greenZ + 9.88, cam, width, height)
       if (pinBase) {
         const cupRx = Math.max(4.2, pinBase.scale * CUP_RADIUS_YARDS)
         const cupRy = Math.max(1.8, cupRx * 0.38)
@@ -284,31 +487,79 @@ export function Pseudo3D({ hole, ball, aimDeg, follow, showAim, zoom, onAimDrag 
         ctx.stroke()
       }
       if (pinBase && pinTop) {
-        ctx.strokeStyle = '#222'
-        ctx.lineWidth = 2
+        ctx.lineCap = 'round'
+        ctx.strokeStyle = '#1b1b1b'
+        ctx.lineWidth = 4
         ctx.beginPath()
         ctx.moveTo(pinBase.sx, pinBase.sy)
         ctx.lineTo(pinTop.sx, pinTop.sy)
         ctx.stroke()
+        ctx.strokeStyle = '#f7f3e8'
+        ctx.lineWidth = 2
+        ctx.stroke()
+
+        const fw = Math.max(16, Math.min(34, (pinTop.sy - pinBase.sy) * -0.14))
+        const fh = fw * 0.62
+        const fx = pinTop.sx + 1
+        const fy = pinTop.sy
         ctx.fillStyle = '#e10600'
+        ctx.strokeStyle = '#6a0400'
+        ctx.lineWidth = 1.2
         ctx.beginPath()
-        ctx.moveTo(pinTop.sx, pinTop.sy)
-        ctx.lineTo(pinTop.sx + 14, pinTop.sy + 5)
-        ctx.lineTo(pinTop.sx, pinTop.sy + 10)
+        ctx.moveTo(fx, fy)
+        ctx.bezierCurveTo(fx + fw * 0.35, fy - fh * 0.22, fx + fw * 0.6, fy + fh * 0.18, fx + fw, fy - fh * 0.02)
+        ctx.lineTo(fx + fw * 0.96, fy + fh * 0.7)
+        ctx.bezierCurveTo(fx + fw * 0.6, fy + fh * 0.9, fx + fw * 0.35, fy + fh * 0.5, fx, fy + fh * 0.78)
         ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)'
+        ctx.beginPath()
+        ctx.moveTo(fx, fy)
+        ctx.bezierCurveTo(fx + fw * 0.35, fy - fh * 0.22, fx + fw * 0.6, fy + fh * 0.18, fx + fw, fy - fh * 0.02)
+        ctx.lineTo(fx + fw * 0.98, fy + fh * 0.2)
+        ctx.bezierCurveTo(fx + fw * 0.6, fy + fh * 0.38, fx + fw * 0.35, fy + fh * 0.02, fx, fy + fh * 0.22)
+        ctx.closePath()
+        ctx.fill()
+        ctx.fillStyle = '#ffe14a'
+        ctx.beginPath()
+        ctx.arc(pinTop.sx, pinTop.sy, 2.6, 0, Math.PI * 2)
         ctx.fill()
       }
 
       const aim = (aimDeg * Math.PI) / 180
-      const a0 = project(0, 0, teeZ + 0.1, cam, width, height)
-      const a1 = project(Math.sin(aim) * 10, Math.cos(aim) * 32, teeZ + 0.1, cam, width, height)
-      if (a0 && a1 && showAim && !follow) {
-        ctx.strokeStyle = '#ffe14a'
-        ctx.lineWidth = 4
-        ctx.beginPath()
-        ctx.moveTo(a0.sx, a0.sy)
-        ctx.lineTo(a1.sx, a1.sy)
-        ctx.stroke()
+      if (showAim && !follow) {
+        const reach = 20
+        const arc: { sx: number; sy: number }[] = []
+        for (let i = 0; i <= 24; i += 1) {
+          const t = i / 24
+          const bend = sidespin * reach * 0.4 * t * t
+          const p = project(
+            Math.sin(aim) * reach * t + Math.cos(aim) * bend,
+            Math.cos(aim) * reach * t - Math.sin(aim) * bend,
+            teeZ + 0.1 + Math.sin((t * Math.PI) / 2) * 4.5,
+            cam,
+            width,
+            height,
+          )
+          if (p) {
+            arc.push(p)
+          }
+        }
+        if (arc.length > 1) {
+          ctx.save()
+          ctx.lineCap = 'round'
+          ctx.setLineDash([0.1, 11])
+          ctx.beginPath()
+          arc.forEach((p, i) => (i === 0 ? ctx.moveTo(p.sx, p.sy) : ctx.lineTo(p.sx, p.sy)))
+          ctx.strokeStyle = 'rgba(40, 28, 0, 0.55)'
+          ctx.lineWidth = 7.5
+          ctx.stroke()
+          ctx.strokeStyle = '#ffe14a'
+          ctx.lineWidth = 5
+          ctx.stroke()
+          ctx.restore()
+        }
       }
 
       const wind = windVector(hole)
@@ -350,10 +601,12 @@ export function Pseudo3D({ hole, ball, aimDeg, follow, showAim, zoom, onAimDrag 
         : Math.max(ball.z, groundZ + 0.08)
       const shadow = inCup ? null : project(ball.x, ball.y, groundZ, cam, width, height)
       const ballP = project(ball.x, ball.y, drawZ, cam, width, height)
+      const airborne = Math.max(0, ball.z - groundZ)
       if (shadow) {
-        ctx.fillStyle = 'rgba(0,0,0,0.3)'
+        const spread = 1 + Math.min(1.2, airborne * 0.08)
+        ctx.fillStyle = `rgba(0, 0, 0, ${Math.max(0.12, 0.34 - airborne * 0.012)})`
         ctx.beginPath()
-        ctx.ellipse(shadow.sx, shadow.sy, 8, 3.4, 0, 0, Math.PI * 2)
+        ctx.ellipse(shadow.sx + 2, shadow.sy, 8 * spread, 3.4 * spread, 0, 0, Math.PI * 2)
         ctx.fill()
       }
       if (ballP) {
@@ -362,19 +615,28 @@ export function Pseudo3D({ hole, ball, aimDeg, follow, showAim, zoom, onAimDrag 
         const r = inCup
           ? Math.min(cupPx * (BALL_DIAMETER_INCHES / CUP_DIAMETER_INCHES) * 0.92, Math.max(2.2, worldR))
           : Math.max(5, 6.4 * (ballP.scale / 18))
-        const g = ctx.createRadialGradient(
-          ballP.sx - r * 0.3,
-          ballP.sy - r * 0.3,
-          r * 0.2,
-          ballP.sx,
-          ballP.sy,
-          r,
-        )
-        g.addColorStop(0, '#fff')
-        g.addColorStop(1, '#c8c8c8')
+        const onTee = !follow && !inCup && Math.hypot(ball.x, ball.y) < 0.6 && airborne < 0.3
+        if (onTee) {
+          ctx.fillStyle = '#f2b65a'
+          ctx.strokeStyle = '#8a5a1c'
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.moveTo(ballP.sx - r * 0.42, ballP.sy + r * 0.6)
+          ctx.lineTo(ballP.sx + r * 0.42, ballP.sy + r * 0.6)
+          ctx.lineTo(ballP.sx + r * 0.14, ballP.sy + r * 2.2)
+          ctx.lineTo(ballP.sx - r * 0.14, ballP.sy + r * 2.2)
+          ctx.closePath()
+          ctx.fill()
+          ctx.stroke()
+        }
+        const by = onTee ? ballP.sy - r * 0.2 : ballP.sy
+        const g = ctx.createRadialGradient(ballP.sx - r * 0.35, by - r * 0.35, r * 0.15, ballP.sx, by, r)
+        g.addColorStop(0, '#ffffff')
+        g.addColorStop(0.7, '#eceae4')
+        g.addColorStop(1, '#b9b6ae')
         ctx.fillStyle = g
         ctx.beginPath()
-        ctx.arc(ballP.sx, ballP.sy, r, 0, Math.PI * 2)
+        ctx.arc(ballP.sx, by, r, 0, Math.PI * 2)
         ctx.fill()
         ctx.strokeStyle = '#222'
         ctx.lineWidth = 1.5
@@ -385,7 +647,7 @@ export function Pseudo3D({ hole, ball, aimDeg, follow, showAim, zoom, onAimDrag 
     draw()
     window.addEventListener('resize', draw)
     return () => window.removeEventListener('resize', draw)
-  }, [aimDeg, ball, follow, hole, showAim, zoom])
+  }, [aimDeg, ball, follow, hole, showAim, sidespin, zoom])
 
   useEffect(() => {
     const canvas = ref.current

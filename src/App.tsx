@@ -250,6 +250,7 @@ export default function App() {
         hole={hole}
         ball={ball}
         aimDeg={aimDeg}
+        sidespin={sidespin}
         follow={phase === 'fly'}
         showAim={phase === 'aim' && !shared}
         zoom={zoom}
