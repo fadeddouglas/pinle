@@ -36,10 +36,7 @@ export function Result({
       ? 'FIND THE DROP'
       : 'FROM THE STICK'
   const scoreShots = remaining > 0 && !sharedView ? [result] : results
-  const paste = shareTextWithLink(
-    formatRoundShareText(hole.puzzleNumber, scoreShots),
-    `https://${SITE_HOST}`,
-  )
+  const paste = shareTextWithLink(formatRoundShareText(hole.puzzleNumber, scoreShots), `https://${SITE_HOST}`)
 
   return (
     <div className="result" role="dialog" aria-label="Shot result">

@@ -66,8 +66,8 @@ export async function drawShareCard(
   }
 
   const pinX = 450 + hole.pinX * 8
-  const pinY = 820
-  const teeY = 1020
+  const pinY = 790
+  const teeY = 980
   ctx.strokeStyle = '#0d3d18'
   ctx.lineWidth = 18
   ctx.beginPath()
@@ -107,8 +107,16 @@ export async function drawShareCard(
   ctx.lineWidth = 4
   ctx.stroke()
 
-  ctx.font = '28px Anton, sans-serif'
-  fillStroke(ctx, SITE_HOST.toUpperCase(), 450, 1080, '#fff', '#111', 8)
+  ctx.fillStyle = '#082010'
+  ctx.fillRect(0, 1004, 900, 116)
+  ctx.strokeStyle = '#111'
+  ctx.lineWidth = 6
+  ctx.beginPath()
+  ctx.moveTo(0, 1004)
+  ctx.lineTo(900, 1004)
+  ctx.stroke()
+  ctx.font = '42px Anton, sans-serif'
+  fillStroke(ctx, `https://${SITE_HOST}`, 450, 1078, '#ffe14a', '#111', 10)
 
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((value) => {
@@ -131,12 +139,14 @@ function downloadCard(blob: Blob, puzzle: number): void {
   URL.revokeObjectURL(url)
 }
 
+const SITE_URL = `https://${SITE_HOST}`
+
 function scoreText(hole: Hole, result: ShotResult, shots: ShotResult[]): string {
   const score =
     shots.length > 1
       ? formatRoundShareText(hole.puzzleNumber, shots)
       : formatShareText(hole.puzzleNumber, result)
-  return shareTextWithLink(score, `https://${SITE_HOST}`)
+  return shareTextWithLink(score, SITE_URL)
 }
 
 async function copyGraphic(blob: Blob, text: string): Promise<boolean> {
@@ -189,13 +199,17 @@ export async function shareResult(
   }
 
   if (navigator.share) {
-    const withFile = { files: [file], text, title }
+    const withFile = { files: [file], text, title, url: SITE_URL }
     try {
       if (navigator.canShare?.(withFile)) {
         await navigator.share(withFile)
         return 'shared'
       }
-      await navigator.share({ title, text })
+      if (navigator.canShare?.({ files: [file], text, title })) {
+        await navigator.share({ files: [file], text, title, url: SITE_URL })
+        return 'shared'
+      }
+      await navigator.share({ title, text, url: SITE_URL })
       return 'shared'
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
