@@ -327,6 +327,26 @@ body,
   paint-order: stroke fill;
 }
 
+.share-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.share-row button {
+  width: 100%;
+  min-height: 44px;
+  font-size: 18px;
+}
+
+.share-note {
+  margin: -2px 0 0;
+  font-size: 13px;
+  color: #cfe9cf;
+}
+
 .share-text {
   margin: 0;
   padding: 10px 14px;

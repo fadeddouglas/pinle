@@ -9,7 +9,9 @@ type Props = {
   triesMax: number
   shareStatus: string | null
   sharedView?: boolean
-  onShare: () => void
+  canSend: boolean
+  onCopy: () => void
+  onSend: () => void
   onAccount: () => void
   onNextShot?: () => void
   onPlayToday?: () => void
@@ -22,7 +24,9 @@ export function Result({
   triesMax,
   shareStatus,
   sharedView = false,
-  onShare,
+  canSend,
+  onCopy,
+  onSend,
   onAccount,
   onNextShot,
   onPlayToday,
@@ -37,6 +41,20 @@ export function Result({
       : 'FROM THE STICK'
   const scoreShots = remaining > 0 && !sharedView ? [result] : results
   const paste = shareTextWithLink(formatRoundShareText(hole.puzzleNumber, scoreShots), `https://${SITE_HOST}`)
+  const roundOver = !sharedView && !(onNextShot && remaining > 0)
+
+  const shareButtons = (primary: boolean) => (
+    <div className="share-row">
+      {canSend ? (
+        <button type="button" className={primary ? 'swing' : 'ghost'} onClick={onSend}>
+          SEND CARD
+        </button>
+      ) : null}
+      <button type="button" className={primary && !canSend ? 'swing' : 'ghost'} onClick={onCopy}>
+        COPY CARD
+      </button>
+    </div>
+  )
 
   return (
     <div className="result" role="dialog" aria-label="Shot result">
@@ -54,25 +72,13 @@ export function Result({
         <button type="button" className="swing" onClick={onPlayToday}>
           PLAY TODAY
         </button>
-      ) : onNextShot && remaining > 0 ? (
+      ) : !roundOver && onNextShot ? (
         <button type="button" className="swing" onClick={onNextShot}>
           NEXT SHOT · {remaining} LEFT
         </button>
-      ) : (
-        <button type="button" className="swing" onClick={onShare}>
-          SHARE
-        </button>
-      )}
-      {!sharedView && onNextShot && remaining > 0 ? (
-        <button type="button" className="ghost" onClick={onShare}>
-          SHARE THIS SHOT
-        </button>
       ) : null}
-      {sharedView ? (
-        <button type="button" className="ghost" onClick={onShare}>
-          SHARE
-        </button>
-      ) : null}
+      {shareButtons(roundOver)}
+      {canSend ? <p className="share-note">Messages, Instagram, WhatsApp &amp; more</p> : null}
       {shareStatus ? <p className="share-status">{shareStatus}</p> : null}
       <pre className="share-text" tabIndex={0}>
         {paste}

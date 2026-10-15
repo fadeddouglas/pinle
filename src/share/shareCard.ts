@@ -149,81 +149,93 @@ function scoreText(hole: Hole, result: ShotResult, shots: ShotResult[]): string 
   return shareTextWithLink(score, SITE_URL)
 }
 
-async function copyGraphic(blob: Blob, text: string): Promise<boolean> {
-  if (!navigator.clipboard?.write) {
+export type ShareDraft = {
+  puzzle: number
+  text: string
+  title: string
+  card: Promise<Blob>
+}
+
+export type ShareOutcome = 'shared' | 'copied-image' | 'copied-text' | 'downloaded'
+
+/** Render the card ahead of the tap: iOS only allows clipboard and share-sheet calls right after a gesture. */
+export function prepareShare(hole: Hole, result: ShotResult, round?: ShotResult[]): ShareDraft {
+  const shots = round && round.length > 0 ? round : [result]
+  const card = drawShareCard(hole, result, shots)
+  card.catch(() => undefined)
+  return {
+    puzzle: hole.puzzleNumber,
+    text: scoreText(hole, result, shots),
+    title: `PINLE #${hole.puzzleNumber}`,
+    card,
+  }
+}
+
+export function canSendCard(): boolean {
+  return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+}
+
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+async function writeCardToClipboard(draft: ShareDraft): Promise<boolean> {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
     return false
   }
-  const png = blob
-  const plain = new Blob([text], { type: 'text/plain' })
+  const plain = new Blob([draft.text], { type: 'text/plain' })
   try {
     await navigator.clipboard.write([
-      new ClipboardItem({
-        'image/png': png,
-        'text/plain': plain,
-      }),
+      new ClipboardItem({ 'image/png': draft.card, 'text/plain': Promise.resolve(plain) }),
     ])
     return true
   } catch {
     try {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'image/png': Promise.resolve(png),
-          'text/plain': Promise.resolve(plain),
-        }),
-      ])
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': draft.card })])
       return true
     } catch {
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
-        return true
-      } catch {
-        return false
-      }
+      return false
     }
   }
 }
 
-export async function shareResult(
-  hole: Hole,
-  result: ShotResult,
-  round?: ShotResult[],
-): Promise<string> {
-  const shots = round && round.length > 0 ? round : [result]
-  const text = scoreText(hole, result, shots)
-  const blob = await drawShareCard(hole, result, shots)
-  const file = new File([blob], `pinle-${hole.puzzleNumber}.png`, { type: 'image/png' })
-  const title = `PINLE #${hole.puzzleNumber}`
-
-  if (await copyGraphic(blob, text)) {
-    return 'copied-image'
-  }
-
-  if (navigator.share) {
-    const withFile = { files: [file], text, title, url: SITE_URL }
-    try {
-      if (navigator.canShare?.(withFile)) {
-        await navigator.share(withFile)
-        return 'shared'
-      }
-      if (navigator.canShare?.({ files: [file], text, title })) {
-        await navigator.share({ files: [file], text, title, url: SITE_URL })
-        return 'shared'
-      }
-      await navigator.share({ title, text, url: SITE_URL })
-      return 'shared'
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        throw error
-      }
-    }
-  }
-
+async function fallbackCopy(draft: ShareDraft): Promise<ShareOutcome> {
+  const blob = await draft.card
   try {
-    await navigator.clipboard.writeText(text)
-    downloadCard(blob, hole.puzzleNumber)
+    await navigator.clipboard.writeText(draft.text)
+    downloadCard(blob, draft.puzzle)
     return 'copied-text'
   } catch {
-    downloadCard(blob, hole.puzzleNumber)
+    downloadCard(blob, draft.puzzle)
     return 'downloaded'
+  }
+}
+
+export async function copyCard(draft: ShareDraft): Promise<ShareOutcome> {
+  if (await writeCardToClipboard(draft)) {
+    return 'copied-image'
+  }
+  return fallbackCopy(draft)
+}
+
+/** Opens the system share sheet (Messages, Instagram, WhatsApp, …) with the card attached. */
+export async function sendCard(draft: ShareDraft): Promise<ShareOutcome> {
+  if (!canSendCard()) {
+    return copyCard(draft)
+  }
+  const blob = await draft.card
+  const file = new File([blob], `pinle-${draft.puzzle}.png`, { type: 'image/png' })
+  try {
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], text: draft.text, title: draft.title })
+    } else {
+      await navigator.share({ title: draft.title, text: draft.text, url: SITE_URL })
+    }
+    return 'shared'
+  } catch (error) {
+    if (isAbort(error)) {
+      throw error
+    }
+    return fallbackCopy(draft)
   }
 }

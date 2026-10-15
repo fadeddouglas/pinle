@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Analytics } from '@vercel/analytics/react'
 import { recommendedClubId } from './game/clubs.ts'
 import { bestShot, simulateShot } from './game/physics.ts'
 import { createHole } from './game/seed.ts'
 import type { Hole, ShotResult, Vec3 } from './game/types.ts'
-import { shareResult } from './share/shareCard.ts'
+import { canSendCard, copyCard, prepareShare, sendCard, type ShareOutcome } from './share/shareCard.ts'
 import {
   decodeShareCard,
   holeFromShare,
@@ -24,12 +24,12 @@ const DEFAULT_ZOOM = 1
 const MIN_ZOOM = 0.7
 const MAX_ZOOM = 2.4
 
-function shareMessage(kind: string): string {
+function shareMessage(kind: ShareOutcome): string {
   if (kind === 'shared') {
-    return 'CARD SHARED'
+    return 'CARD SENT'
   }
   if (kind === 'copied-image') {
-    return 'CARD COPIED · pinle.io'
+    return 'CARD COPIED — PASTE IT ANYWHERE'
   }
   if (kind === 'downloaded') {
     return 'CARD SAVED — PASTE pinle.io WITH IT'
@@ -214,18 +214,21 @@ export default function App() {
     setPlaying(true)
   }
 
-  async function handleShare() {
-    if (!result) {
+  const shareDraft = useMemo(() => {
+    if (phase !== 'done' || !result) {
+      return null
+    }
+    const pack = shots.length > 0 ? shots : [result]
+    const roundDone = pack.length >= SHOTS_PER_DAY || Boolean(shared)
+    return prepareShare(hole, roundDone ? (bestShot(pack) ?? result) : result, pack)
+  }, [hole, phase, result, shared, shots])
+
+  async function handleShare(mode: 'copy' | 'send') {
+    if (!shareDraft) {
       return
     }
     try {
-      const pack = shots.length > 0 ? shots : [result]
-      const roundDone = pack.length >= SHOTS_PER_DAY || Boolean(shared)
-      const kind = await shareResult(
-        hole,
-        roundDone ? bestShot(pack) : result,
-        pack,
-      )
+      const kind = mode === 'send' ? await sendCard(shareDraft) : await copyCard(shareDraft)
       setShareStatus(shareMessage(kind))
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -311,7 +314,9 @@ export default function App() {
           triesMax={SHOTS_PER_DAY}
           shareStatus={shareStatus}
           sharedView={Boolean(shared)}
-          onShare={handleShare}
+          canSend={canSendCard()}
+          onCopy={() => void handleShare('copy')}
+          onSend={() => void handleShare('send')}
           onAccount={() => setAccountOpen(true)}
           onNextShot={!shared && shots.length < SHOTS_PER_DAY ? handleNextShot : undefined}
           onPlayToday={shared ? handlePlayToday : undefined}
