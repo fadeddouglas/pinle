@@ -38,3 +38,9 @@ ios/DerivedData
 *.p12
 *.mobileprovision
 store/keystore/
+build/
+ios/fastlane/report.xml
+ios/fastlane/Preview.html
+ios/fastlane/screenshots
+ios/fastlane/test_output
+AuthKey_*.p8

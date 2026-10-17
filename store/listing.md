@@ -1,6 +1,6 @@
 # Pinle store listing
 
-Use this copy in Google Play Console and App Store Connect. Do not submit until the developer accounts and a signed build are ready.
+Use this copy in App Store Connect. Google Play is later — ignore Play Console, the 1024×500 feature graphic, and the Android APK for now. Do not submit until a signed iOS build is uploaded.
 
 ## Identity
 
@@ -13,10 +13,6 @@ Use this copy in Google Play Console and App Store Connect. Do not submit until 
 - Privacy: https://pinle.io/privacy.html
 - Support: https://pinle.io/support.html
 - Contact: hello@pinle.io
-
-## Short description (Play, 80 characters)
-
-Daily closest-to-the-pin. One hole. Three shots. New par 3 every day.
 
 ## Description
 
@@ -36,15 +32,21 @@ golf, daily, wordle, closest to the pin, par 3, sports, puzzle
 
 First release. Daily hole, three shots, shareable score card.
 
+## Marketing images
+
+- Header (1920×1080), only if App Store Connect asks for an event or custom page header: `store/marketing/header-1920x1080.png`
+
+Search results on the App Store use the 1024 app icon from the iOS build plus the name and subtitle. There is no search banner to upload.
+
 ## Screenshots
 
-Phone-size captures live in `store/screenshots/`. Play wants at least 2 phone screenshots. App Store wants 6.5-inch iPhone images (1242×2688 or 1284×2778).
+Upload PNGs from `store/screenshots/iphone-6.3/` into App Store Connect’s **required iPhone 6.3"** slot (Dynamic Island, medium display). Each file is **1206 × 2622**.
 
-Suggested set:
+If you are on the **6.9"** slot instead, use `store/screenshots/iphone-6.9/` (**1290 × 2796**).
 
-1. Landing — PLAY
-2. Tee and aim HUD
-3. Result card with SEND CARD / COPY CARD
+1. `01-landing.png` — PLAY
+2. `02-aim.png` — tee and HUD
+3. `03-result.png` — score card with SEND CARD / COPY CARD
 
 ## Android debug APK
 
@@ -70,17 +72,4 @@ keytool -genkeypair -v -keystore store/keystore/pinle-release.keystore -alias pi
 
 ## iOS build
 
-This Windows machine cannot compile an IPA. On a Mac:
-
-```
-npm run cap:sync
-npx cap open ios
-```
-
-Or run the `iOS build` GitHub Action after adding these secrets:
-
-- `APPSTORE_ISSUER_ID`
-- `APPSTORE_CERTIFICATE_BASE64`
-- `APPSTORE_CERTIFICATE_PASSWORD`
-- `APPSTORE_PROVISION_BASE64`
-- `APPLE_TEAM_ID`
+You do not need a Mac for the binary. Follow [store/ios-ci.md](ios-ci.md): add App Store Connect API secrets, then run the **iOS App Store** GitHub Action. That uploads an IPA; it does not submit for review.

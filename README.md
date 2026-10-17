@@ -18,4 +18,4 @@ npm run cap:sync
 npm run cap:android
 ```
 
-A debug APK needs Android Studio (JDK + Android SDK). iOS needs a Mac or the `iOS build` GitHub Action. This Windows machine cannot compile an IPA.
+App Store iOS builds run on GitHub’s Macs. See [store/ios-ci.md](store/ios-ci.md). Google Play is later.

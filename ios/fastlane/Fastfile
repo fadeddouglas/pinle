@@ -1,0 +1,85 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Archive Pinle and upload the IPA to App Store Connect (does not submit for review)"
+  lane :release do
+    setup_ci if ENV["CI"]
+
+    key_id = ENV.fetch("APP_STORE_CONNECT_KEY_ID")
+    issuer_id = ENV.fetch("APP_STORE_CONNECT_ISSUER_ID")
+    key_content = ENV.fetch("APP_STORE_CONNECT_KEY")
+    team_id = ENV.fetch("APPLE_TEAM_ID")
+    match_password = ENV.fetch("MATCH_PASSWORD")
+
+    api_key = app_store_connect_api_key(
+      key_id: key_id,
+      issuer_id: issuer_id,
+      key_content: key_content,
+      is_key_content_base64: true,
+      in_house: false
+    )
+
+    build_number = ENV["GITHUB_RUN_NUMBER"] || Time.now.strftime("%y%m%d%H%M")
+    increment_build_number(
+      build_number: build_number,
+      xcodeproj: "App/App.xcodeproj"
+    )
+
+    repo = ENV.fetch("GITHUB_REPOSITORY")
+    token = ENV.fetch("GITHUB_TOKEN")
+    ENV["MATCH_GIT_BASIC_AUTHORIZATION"] = Base64.strict_encode64("x-access-token:#{token}")
+    ENV["MATCH_PASSWORD"] = match_password
+
+    match(
+      type: "appstore",
+      app_identifier: "io.pinle.app",
+      team_id: team_id,
+      api_key: api_key,
+      git_url: "https://github.com/#{repo}.git",
+      git_branch: "match-certs",
+      storage_mode: "git",
+      readonly: false,
+      clone_branch_directly: true
+    )
+
+    profile_name = lane_context[SharedValues::SIGH_NAME] || "match AppStore io.pinle.app"
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "App/App.xcodeproj",
+      team_id: team_id,
+      bundle_identifier: "io.pinle.app",
+      code_sign_identity: "Apple Distribution",
+      profile_name: profile_name
+    )
+
+    build_app(
+      project: "App/App.xcodeproj",
+      scheme: "App",
+      configuration: "Release",
+      destination: "generic/platform=iOS",
+      export_method: "app-store",
+      output_directory: "../build",
+      output_name: "Pinle",
+      clean: true,
+      xcargs: "DEVELOPMENT_TEAM=#{team_id}",
+      export_options: {
+        method: "app-store",
+        signingStyle: "manual",
+        teamID: team_id,
+        provisioningProfiles: {
+          "io.pinle.app" => profile_name
+        }
+      }
+    )
+
+    upload_to_app_store(
+      api_key: api_key,
+      skip_metadata: true,
+      skip_screenshots: true,
+      precheck_include_in_app_purchases: false,
+      submit_for_review: false,
+      force: true
+    )
+  end
+end
