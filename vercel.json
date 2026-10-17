@@ -1,4 +1,9 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "match-certs": false
+    }
+  },
   "rewrites": [
     {
       "source": "/((?!assets/|.*\\..*).*)",
