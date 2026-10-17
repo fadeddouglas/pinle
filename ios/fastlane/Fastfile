@@ -38,8 +38,7 @@ platform :ios do
       git_url: "https://github.com/#{repo}.git",
       git_branch: "match-certs",
       storage_mode: "git",
-      readonly: false,
-      clone_branch_directly: true
+      readonly: false
     )
 
     profile_name = lane_context[SharedValues::SIGH_NAME] || "match AppStore io.pinle.app"
