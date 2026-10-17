@@ -1,0 +1,23 @@
+{
+  "name": "Pinle",
+  "short_name": "Pinle",
+  "description": "Daily closest-to-the-pin. One hole. Three shots.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d3a1c",
+  "theme_color": "#0d3a1c",
+  "icons": [
+    {
+      "src": "/icons/icon-180.png",
+      "type": "image/png",
+      "sizes": "180x180",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ]
+}

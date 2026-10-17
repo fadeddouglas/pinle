@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pinle</string>
+    <string name="title_activity_main">Pinle</string>
+    <string name="package_name">io.pinle.app</string>
+    <string name="custom_url_scheme">io.pinle.app</string>
+</resources>

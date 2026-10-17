@@ -4,6 +4,7 @@ import { recommendedClubId } from './game/clubs.ts'
 import { bestShot, simulateShot } from './game/physics.ts'
 import { createHole } from './game/seed.ts'
 import type { Hole, ShotResult, Vec3 } from './game/types.ts'
+import { isNativeApp } from './native.ts'
 import { canSendCard, copyCard, prepareShare, sendCard, type ShareOutcome } from './share/shareCard.ts'
 import {
   decodeShareCard,
@@ -242,7 +243,7 @@ export default function App() {
     return (
       <div className="app">
         <Landing onPlay={() => setPlaying(true)} />
-        <Analytics />
+        {isNativeApp() ? null : <Analytics />}
       </div>
     )
   }
@@ -336,7 +337,7 @@ export default function App() {
           </div>
         </div>
       ) : null}
-      <Analytics />
+      {isNativeApp() ? null : <Analytics />}
     </div>
   )
 }

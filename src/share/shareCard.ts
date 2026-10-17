@@ -1,5 +1,8 @@
+import { Directory, Filesystem } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
 import { formatDistance, formatRoundShareText, formatShareText, SITE_HOST } from '../game/physics.ts'
 import type { Hole, ShotResult } from '../game/types.ts'
+import { isNativeApp } from '../native.ts'
 import { shareTextWithLink } from './shareLink.ts'
 
 function fillStroke(
@@ -172,11 +175,40 @@ export function prepareShare(hole: Hole, result: ShotResult, round?: ShotResult[
 }
 
 export function canSendCard(): boolean {
-  return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+  return isNativeApp() || (typeof navigator !== 'undefined' && typeof navigator.share === 'function')
 }
 
 function isAbort(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError'
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  return /cancel|abort/i.test(message)
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let binary = ''
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+  return btoa(binary)
+}
+
+async function sendNativeCard(draft: ShareDraft): Promise<ShareOutcome> {
+  const blob = await draft.card
+  const written = await Filesystem.writeFile({
+    path: `pinle-${draft.puzzle}.png`,
+    data: await blobToBase64(blob),
+    directory: Directory.Cache,
+  })
+  await Share.share({
+    title: draft.title,
+    text: draft.text,
+    dialogTitle: draft.title,
+    files: [written.uri],
+  })
+  return 'shared'
 }
 
 async function writeCardToClipboard(draft: ShareDraft): Promise<boolean> {
@@ -220,6 +252,16 @@ export async function copyCard(draft: ShareDraft): Promise<ShareOutcome> {
 
 /** Opens the system share sheet (Messages, Instagram, WhatsApp, …) with the card attached. */
 export async function sendCard(draft: ShareDraft): Promise<ShareOutcome> {
+  if (isNativeApp()) {
+    try {
+      return await sendNativeCard(draft)
+    } catch (error) {
+      if (isAbort(error)) {
+        throw error instanceof DOMException ? error : new DOMException('Share canceled', 'AbortError')
+      }
+      return fallbackCopy(draft)
+    }
+  }
   if (!canSendCard()) {
     return copyCard(draft)
   }

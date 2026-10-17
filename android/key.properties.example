@@ -1,0 +1,4 @@
+storePassword=change-me
+keyPassword=change-me
+keyAlias=pinle
+storeFile=../store/keystore/pinle-release.keystore

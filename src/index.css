@@ -46,7 +46,8 @@ body,
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 14px 18px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) calc(18px + env(safe-area-inset-right, 0px))
+    14px calc(18px + env(safe-area-inset-left, 0px));
   pointer-events: none;
 }
 
@@ -62,7 +63,7 @@ body,
 
 .zoom-dock {
   position: absolute;
-  top: 14px;
+  top: calc(14px + env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
@@ -117,7 +118,8 @@ body,
   justify-content: center;
   gap: 28px;
   background: radial-gradient(circle at top, #167a36, #082010 70%);
-  padding: 24px;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 24px
+    calc(24px + env(safe-area-inset-bottom, 0px));
   text-align: center;
 }
 
@@ -297,7 +299,7 @@ body,
 .result {
   position: absolute;
   left: 50%;
-  bottom: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 2;
   width: min(440px, calc(100% - 24px));
@@ -435,7 +437,7 @@ body,
     font-size: 22px;
   }
   .hud-right {
-    top: 84px;
+    top: calc(84px + env(safe-area-inset-top, 0px));
     left: 6px;
     right: auto;
     bottom: 262px;
